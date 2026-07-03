@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: smek_postgres
+    environment:
+      POSTGRES_USER: smek_user
+      POSTGRES_PASSWORD: smek_password
+      POSTGRES_DB: smek_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  pgdata:

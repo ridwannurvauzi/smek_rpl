@@ -1,0 +1,175 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  PANITIA
+  PESERTA
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  ONGOING
+  FINISHED
+  CANCELLED
+}
+
+enum RegistrationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+}
+
+enum AttendanceMethod {
+  MANUAL
+  QR
+}
+
+enum CommitteePosition {
+  KETUA
+  SEKRETARIS
+  BENDAHARA
+  ANGGOTA
+  OPERATOR
+}
+
+model User {
+  id                    String             @id @default(uuid())
+  name                  String
+  email                 String             @unique
+  passwordHash          String
+  role                  Role
+  nim                   String?
+  nip                   String?
+  phone                 String?
+  isActive              Boolean            @default(true)
+  emailVerifiedAt       DateTime?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  createdEvents         Event[]            @relation("EventCreator")
+  registrations         Registration[]     @relation("ParticipantRegistration")
+  committeeAssignments  EventCommittee[]
+  validatedRegistrations Registration[]    @relation("ValidatorRegistration")
+  checkedAttendances    Attendance[]       @relation("AttendanceChecker")
+  issuedCertificates    Certificate[]      @relation("CertificateIssuer")
+  activityLogs          ActivityLog[]
+}
+
+model Event {
+  id                     String             @id @default(uuid())
+  title                  String
+  description            String?
+  location               String
+  startAt                DateTime
+  endAt                  DateTime
+  registrationDeadline   DateTime?
+  quota                  Int
+  status                 EventStatus        @default(DRAFT)
+  bannerUrl              String?
+  certificateTemplateUrl String?
+  createdById            String
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  createdBy              User               @relation("EventCreator", fields: [createdById], references: [id])
+  committees             EventCommittee[]
+  registrations          Registration[]
+}
+
+model EventCommittee {
+  id                      String            @id @default(uuid())
+  eventId                 String
+  userId                  String
+  position                CommitteePosition @default(ANGGOTA)
+  canManageEvent          Boolean           @default(false)
+  canValidateRegistration Boolean           @default(true)
+  canTakeAttendance       Boolean           @default(true)
+  canGenerateCertificate  Boolean           @default(true)
+  createdAt               DateTime          @default(now())
+
+  event                   Event             @relation(fields: [eventId], references: [id])
+  user                    User              @relation(fields: [userId], references: [id])
+
+  @@unique([eventId, userId])
+}
+
+model Registration {
+  id               String             @id @default(uuid())
+  eventId          String
+  participantId    String
+  status           RegistrationStatus @default(PENDING)
+  registeredAt     DateTime           @default(now())
+  validatedById    String?
+  validatedAt      DateTime?
+  rejectionReason  String?
+  notes            String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  event            Event              @relation(fields: [eventId], references: [id])
+  participant      User               @relation("ParticipantRegistration", fields: [participantId], references: [id])
+  validatedBy      User?              @relation("ValidatorRegistration", fields: [validatedById], references: [id])
+  attendance       Attendance?
+  certificate      Certificate?
+
+  @@unique([eventId, participantId])
+}
+
+model Attendance {
+  id               String           @id @default(uuid())
+  registrationId   String           @unique
+  status           AttendanceStatus @default(PRESENT)
+  checkedInAt      DateTime         @default(now())
+  checkedInById    String
+  method           AttendanceMethod @default(MANUAL)
+  notes            String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  registration     Registration     @relation(fields: [registrationId], references: [id])
+  checkedInBy      User             @relation("AttendanceChecker", fields: [checkedInById], references: [id])
+}
+
+model Certificate {
+  id               String    @id @default(uuid())
+  registrationId   String    @unique
+  certificateNumber String   @unique
+  verificationCode String    @unique
+  certificateUrl   String
+  qrCodeUrl        String?
+  issuedAt         DateTime  @default(now())
+  issuedById       String
+  revokedAt        DateTime?
+  revokedReason    String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  registration     Registration @relation(fields: [registrationId], references: [id])
+  issuedBy         User         @relation("CertificateIssuer", fields: [issuedById], references: [id])
+}
+
+model ActivityLog {
+  id          String   @id @default(uuid())
+  userId      String?
+  action      String
+  entity      String
+  entityId    String?
+  description String?
+  createdAt   DateTime @default(now())
+
+  user        User?    @relation(fields: [userId], references: [id])
+}
